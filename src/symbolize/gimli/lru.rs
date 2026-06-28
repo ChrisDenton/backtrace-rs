@@ -2,10 +2,11 @@ use core::mem::{self, MaybeUninit};
 use core::ptr;
 
 /// least-recently-used cache with static size
-pub(crate) struct Lru<T, const N: usize> {
+pub struct Lru<T, const N: usize> {
     // SAFETY: len <= initialized values
     len: usize,
     arr: [MaybeUninit<T>; N],
+    ref_count: u64,
 }
 
 impl<T, const N: usize> Default for Lru<T, N> {
@@ -13,15 +14,25 @@ impl<T, const N: usize> Default for Lru<T, N> {
         Lru {
             len: 0,
             arr: [const { MaybeUninit::uninit() }; N],
+            ref_count: 0,
         }
     }
 }
 
 impl<T, const N: usize> Lru<T, N> {
+    pub fn add_ref(&mut self) {
+        self.ref_count += 1;
+    }
+
+    pub fn dec_ref(&mut self) {
+        self.ref_count -= 1;
+    }
+
     #[inline]
     pub fn clear(&mut self) {
         let len = self.len;
         self.len = 0;
+        assert!(self.ref_count <= 1);
         // SAFETY: we can't touch these values again due to setting self.len = 0
         unsafe { ptr::drop_in_place(ptr::addr_of_mut!(self.arr[0..len]) as *mut [T]) }
     }
@@ -40,6 +51,7 @@ impl<T, const N: usize> Lru<T, N> {
             return None;
         } else if self.len == N {
             self.len = N - 1;
+            assert!(self.ref_count <= 1);
             // SAFETY: we maintain len invariant and bail on N == 0
             unsafe { ptr::drop_in_place(self.arr.as_mut_ptr().cast::<T>().add(N - 1)) };
         };

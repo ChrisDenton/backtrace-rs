@@ -376,7 +376,10 @@ impl Cache {
         unsafe {
             // FIXME: https://github.com/rust-lang/backtrace-rs/issues/678
             #[allow(static_mut_refs)]
-            f(MAPPINGS_CACHE.get_or_insert_with(Cache::new))
+            let cache = MAPPINGS_CACHE.get_or_insert_with(Cache::new);
+            cache.mappings.add_ref();
+            f(cache);
+            cache.mappings.dec_ref();
         }
     }
 
